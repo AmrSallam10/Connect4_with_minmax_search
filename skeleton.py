@@ -56,7 +56,7 @@ It returns a move 0-6 or -1 if it could not make a move.
 To check your code for better performance, change this code to
 use your own algorithm for selecting actions too
 """
-def opponents_move(env):
+def opponents_move(env, board):
    env.change_player() # change to opponent
    avmoves = env.available_moves()
    if not avmoves:
@@ -66,7 +66,8 @@ def opponents_move(env):
    # TODO: Optional? change this to select actions with your policy too
    # that way you get way more interesting games, and you can see if starting
    # is enough to guarantee a win
-   action = random.choice(list(avmoves))
+   # action = random.choice(list(avmoves))
+   action, _ = alpha_beta_decision(board, MAX_DEPTH, SERVER_PIECE, -float("inf"), float("inf"), True)
 
    state, reward, done, _ = env.step(action)
    if done:
@@ -76,7 +77,7 @@ def opponents_move(env):
    return state, reward, done
 
 def student_move(board):
-   col, _ = alpha_beta_decision(board, MAX_DEPTH, -float("inf"), float("inf"), True)
+   col, _ = alpha_beta_decision(board, MAX_DEPTH, PLAYER_PIECE, -float("inf"), float("inf"), True)
    return col
 
 def get_available_moves(board):
@@ -89,8 +90,8 @@ def get_available_moves(board):
 def is_valid_move(board, c):
    return board[0][c] == EMPTY
 
-def place_piece(board, row, col, player):
-   board[row][col] = player
+def place_piece(board, row, col, PLAYER):
+   board[row][col] = PLAYER
 
 def get_open_row(board, col):
     for r in range(ROW_COUNT-1, -1, -1):
@@ -117,8 +118,9 @@ def game_over(board):
                 return True
     return False
 
-def evaluate_board(board):
+def evaluate_board(board, PLAYER):
     score = 0
+    opponents_piece = PLAYER*(-1)
 
     # Check for a tie
     if len(get_available_moves(board)) == 0:
@@ -127,54 +129,56 @@ def evaluate_board(board):
     # Adding more advantage to the central column
     center_col = COL_COUNT//2
     center_array = [int(i) for i in list(board[:, center_col])]
-    score += center_array.count(PLAYER_PIECE)*3 - center_array.count(SERVER_PIECE)*3
+    score += center_array.count(PLAYER)*3 - center_array.count(opponents_piece)*3
     
     # Check horizontal sequences
     for row in range(ROW_COUNT):
         for col in range(COL_COUNT - 3):
             seq = [board[row][col + i] for i in range(4)]
-            score += evaluate_sequence(seq)
+            score += evaluate_sequence(seq, PLAYER)
 
     # Check vertical sequences
     for col in range(COL_COUNT):
         for row in range(ROW_COUNT - 3):
             seq = [board[row + i][col] for i in range(4)]
-            score += evaluate_sequence(seq)
+            score += evaluate_sequence(seq, PLAYER)
 
     # Check diagonal (top left to bottom right) sequences
     for row in range(ROW_COUNT - 3):
         for col in range(COL_COUNT - 3):
             seq = [board[row + i][col + i] for i in range(4)]
-            score += evaluate_sequence(seq)
+            score += evaluate_sequence(seq, PLAYER)
 
     # Check diagonal (top right to bottom left) sequences
     for row in range(ROW_COUNT - 3):
         for col in range(3, COL_COUNT):
             seq = [board[row + i][col - i] for i in range(4)]
-            score += evaluate_sequence(seq)
+            score += evaluate_sequence(seq, PLAYER)
     
     return score
 
-def evaluate_sequence(seq):
+def evaluate_sequence(seq, PLAYER):
     score = 0
-    if seq.count(PLAYER_PIECE) == 4:
+    opponents_piece = PLAYER*(-1)
+    if seq.count(PLAYER) == 4:
         score = 1000
-    elif seq.count(PLAYER_PIECE) == 3 and seq.count(EMPTY) == 1:
+    elif seq.count(PLAYER) == 3 and seq.count(EMPTY) == 1:
         score = 100
-    elif seq.count(PLAYER_PIECE) == 2 and seq.count(EMPTY) == 2:
+    elif seq.count(PLAYER) == 2 and seq.count(EMPTY) == 2:
         score = 10
-    elif seq.count(SERVER_PIECE) == 4:
+    elif seq.count(opponents_piece) == 4:
         score = -1000
-    elif seq.count(SERVER_PIECE) == 3 and seq.count(EMPTY) == 1:
+    elif seq.count(opponents_piece) == 3 and seq.count(EMPTY) == 1:
         score = -100
-    elif seq.count(SERVER_PIECE) == 2 and seq.count(EMPTY) == 2:
+    elif seq.count(opponents_piece) == 2 and seq.count(EMPTY) == 2:
         score = -10
     return score
 
-def alpha_beta_decision(board, depth, alpha, beta, maximizingPlayer):
+def alpha_beta_decision(board, depth, PLAYER, alpha, beta, maximizingPlayer):
    available_moves = get_available_moves(board)
+   OPPONENT = PLAYER*(-1)
    if depth == 0 or game_over(board):
-        return (None, evaluate_board(board))
+        return (None, evaluate_board(board, PLAYER))
 
    if maximizingPlayer:
         value = -float("inf")
@@ -182,8 +186,8 @@ def alpha_beta_decision(board, depth, alpha, beta, maximizingPlayer):
         for col in available_moves:
             row = get_open_row(board, col)
             b_copy = board.copy()
-            place_piece(b_copy, row, col, PLAYER_PIECE)
-            new_score = alpha_beta_decision(b_copy, depth-1, alpha, beta, False)[1]
+            place_piece(b_copy, row, col, PLAYER)
+            new_score = alpha_beta_decision(b_copy, depth-1, PLAYER, alpha, beta, False)[1]
             if new_score > value:
                 value = new_score
                 column = col
@@ -198,8 +202,8 @@ def alpha_beta_decision(board, depth, alpha, beta, maximizingPlayer):
       for col in available_moves:
          row = get_open_row(board, col)
          b_copy = board.copy()
-         place_piece(b_copy, row, col, SERVER_PIECE)
-         new_score = alpha_beta_decision(b_copy, depth-1, alpha, beta, True)[1]
+         place_piece(b_copy, row, col, OPPONENT)
+         new_score = alpha_beta_decision(b_copy, depth-1, OPPONENT, alpha, beta, True)[1]
          if new_score < value:
             value = new_score
             column = col
@@ -217,7 +221,7 @@ def play_game(vs_server = False):
    win = +1
    draw = +0.5
    error = -10 (you get this if you try to play in a full column)
-   Currently the player always makes the first move
+   Currently the PLAYER always makes the first move
    """
 
    # default state
@@ -235,7 +239,7 @@ def play_game(vs_server = False):
    else:
       # reset game to starting state
       env.reset(board=None)
-      # determine first player
+      # determine first PLAYER
       student_gets_move = random.choice([True, False])
       if student_gets_move:
          print('You start!')
@@ -281,7 +285,7 @@ def play_game(vs_server = False):
          print()
          # select and make a move for the opponent, returned reward from students view
          if not done:
-            state, result, done = opponents_move(env)
+            state, result, done = opponents_move(env, state)
 
       # Check if the game is over
       if result != 0:
